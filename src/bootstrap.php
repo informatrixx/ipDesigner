@@ -8,6 +8,8 @@ require_once __DIR__ . '/NetworkCapacity.php';
 require_once __DIR__ . '/NetworkCheck.php';
 require_once __DIR__ . '/Csv.php';
 require_once __DIR__ . '/HostCsvTransfer.php';
+require_once __DIR__ . '/PlanningSnapshots.php';
+require_once __DIR__ . '/PlanningWriteGuard.php';
 require_once __DIR__ . '/Repository.php';
 require_once __DIR__ . '/NetworkPlanner.php';
 require_once __DIR__ . '/DynamicReplanner.php';
@@ -37,6 +39,11 @@ function app_network_check(): IpDesigner\NetworkCheck
 function app_host_csv(): IpDesigner\HostCsvTransfer
 {
     return new IpDesigner\HostCsvTransfer(app_database());
+}
+
+function app_snapshots(): IpDesigner\PlanningSnapshots
+{
+    return new IpDesigner\PlanningSnapshots(app_database());
 }
 
 function app_repository(): Repository

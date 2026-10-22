@@ -52,8 +52,20 @@ try {
     $id = id_from($parts, 1);
     $action = $parts[2] ?? '';
     $repo = app_repository();
+    header('X-Planning-Epoch: '.(IpDesigner\PlanningWriteGuard::epoch(app_database()) ?? 'legacy'));
+    if (!in_array($method, ['GET','HEAD','OPTIONS'], true)) {
+        try {
+            $writeGuard = IpDesigner\PlanningWriteGuard::enter(app_database(), $_SERVER['HTTP_X_PLANNING_EPOCH'] ?? null,
+                $method === 'POST' && $resource === 'snapshots' && $id !== null && $action === 'restore');
+        } catch (DomainException $error) {
+            // A restore may have completed while this request waited for the lock.
+            header('X-Planning-Epoch: '.(IpDesigner\PlanningWriteGuard::epoch(app_database()) ?? 'legacy'));
+            throw $error;
+        }
+    }
 
     if ($method === 'GET') {
+        if ($resource === 'snapshots' && count($parts) === 1) respond(app_snapshots()->list());
         if ($resource === 'host-csv' && ($parts[1] ?? '') === 'template') respond(app_host_csv()->template());
         if ($resource === 'host-csv' && ($parts[1] ?? '') === 'export') respond(app_host_csv()->export($_GET));
         if ($resource === 'network-check') respond(app_network_check()->run());
@@ -87,6 +99,15 @@ try {
 
     if ($method === 'POST' || $method === 'PATCH') {
         $input = body();
+        if ($resource === 'snapshots' && $method === 'POST') {
+            if (count($parts) === 1) respond(app_snapshots()->create($input), 201);
+            if ($id && count($parts) === 3 && $action === 'preview') respond(app_snapshots()->preview($id));
+            if ($id && count($parts) === 3 && $action === 'restore') {
+                $restored = app_snapshots()->restore($id, $input);
+                header('X-Planning-Epoch: '.$restored['epoch']);
+                respond($restored);
+            }
+        }
         if ($resource === 'host-csv' && ($parts[1] ?? '') === 'preview') respond(app_host_csv()->preview($input));
         if ($resource === 'host-csv' && ($parts[1] ?? '') === 'apply') respond(app_host_csv()->apply($input));
         if ($resource === 'tools' && ($parts[1] ?? '') === 'ipv4') respond(app_ipv4_calculator()->calculate($input));

@@ -102,11 +102,13 @@ final class HostCsvTransfer
         $owns = !$this->db->inTransaction();
         if ($owns) $this->db->beginTransaction();
         try {
-            $schema = $this->db->query("SELECT type,name,sql FROM sqlite_master WHERE name NOT LIKE 'sqlite_%' AND sql IS NOT NULL ORDER BY type,name")->fetchAll();
+            $schema = $this->db->query("SELECT type,name,sql FROM sqlite_master WHERE name NOT LIKE 'sqlite_%' AND tbl_name NOT IN ('planning_snapshots','planning_state') AND sql IS NOT NULL ORDER BY type,name")->fetchAll();
             $data = [];
             foreach ($schema as $item) if ($item['type'] === 'table') $data[$item['name']] = $this->db->query('SELECT * FROM '.self::identifier($item['name']).' ORDER BY rowid')->fetchAll();
-            $sequences = $this->db->query('SELECT name,seq FROM sqlite_sequence ORDER BY name')->fetchAll();
-            $revision = hash('sha256', json_encode([$schema,$data,$sequences], JSON_THROW_ON_ERROR));
+            $sequences = $this->db->query("SELECT name,seq FROM sqlite_sequence WHERE name NOT IN ('planning_snapshots','planning_state') ORDER BY name")->fetchAll();
+            $hasEpoch = $this->db->query("SELECT 1 FROM sqlite_master WHERE type='table' AND name='planning_state'")->fetchColumn();
+            $epoch = $hasEpoch ? $this->db->query('SELECT restore_epoch FROM planning_state WHERE id=1')->fetchColumn() : null;
+            $revision = hash('sha256', json_encode([$schema,$data,$sequences,$epoch], JSON_THROW_ON_ERROR));
             if ($owns) $this->db->commit();
         } catch (\Throwable $error) {
             if ($owns && $this->db->inTransaction()) $this->db->rollBack();

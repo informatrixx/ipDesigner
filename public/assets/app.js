@@ -1,5 +1,6 @@
 import {createNetworkCheck, renderCheckPage, renderCheckSummary, renderCheckMarkers} from './network-check.js';
 import {mountHostCsv, downloadCsv} from './host-csv.js';
+import {mountPlanningSnapshots, consumeSnapshotRestoreNotice} from './planning-snapshots.js';
 const networkCheck = createNetworkCheck(path => api(path));
 const csrf = document.querySelector('meta[name="csrf-token"]').content;
 const base = (document.querySelector('meta[name="app-base"]')?.content || '').replace(/\/$/, '');
@@ -37,8 +38,28 @@ function notify(message, error = false) {
   const node = document.createElement('div'); node.className = `notice${error ? ' error' : ''}`; node.textContent = message; box.append(node);
   setTimeout(() => node.remove(), 4500);
 }
+let planningEpoch = null;
+let planningStale = false;
+const stalePlanningMessage = 'Der Planungsstand wurde wiederhergestellt oder die Snapshot-Funktion aktiviert. Bitte Seite neu laden; dieser Tab darf nicht mehr speichern.';
+function markPlanningStale() {
+  if (planningStale) return;
+  planningStale = true;
+  networkCheck.invalidate();
+  const node = document.createElement('div'); node.className = 'notice error'; node.dataset.planningStale = '';
+  node.append(document.createTextNode(stalePlanningMessage + ' '));
+  const button = document.createElement('button'); button.type = 'button'; button.className = 'button small secondary'; button.textContent = 'Seite neu laden';
+  button.addEventListener('click', () => location.reload()); node.append(button);
+  document.querySelector('#notice').append(node);
+}
 async function api(path, options = {}) {
-  const response = await fetch(`${base}/api/${path}`, { ...options, headers: {'Content-Type':'application/json','X-CSRF-Token':csrf,...(options.headers || {})} });
+  if (planningStale) throw new Error(stalePlanningMessage);
+  const response = await fetch(`${base}/api/${path}`, { ...options, headers: {'Content-Type':'application/json','X-CSRF-Token':csrf,...(planningEpoch === null ? {} : {'X-Planning-Epoch':planningEpoch}),...(options.headers || {})} });
+  const epoch = response.headers.get('X-Planning-Epoch');
+  const ownRestore = response.ok && options.method === 'POST' && /^snapshots\/\d+\/restore$/.test(path);
+  if (epoch !== null) {
+    if (planningEpoch === null) planningEpoch = epoch;
+    else if (planningEpoch !== epoch && !ownRestore) { markPlanningStale(); throw new Error(stalePlanningMessage); }
+  }
   const payload = await response.json().catch(() => ({error:{message:'Ungültige Serverantwort.'}}));
   if (!response.ok) throw new Error(payload.error?.message || 'Anfrage fehlgeschlagen.');
   if (['POST','PATCH','DELETE'].includes(options.method) && !path.startsWith('tools/') && !path.startsWith('topology/positions') && !path.includes('preview') && path !== 'planner/network') networkCheck.invalidate();
@@ -291,14 +312,14 @@ function wireTopologyDrag(){
 
 async function render(){
   const previousView = state.view;
-  if (routeInfo().view !== 'network-check' && !state.dataReady) await loadData();
-  const route=routeInfo(),view=route.view;state.view=['dashboard','sites','ipam','hosts','routers','services','topology','relations','tools','network-check','host-csv'].includes(view)?view:'dashboard';
+  if (!['network-check','snapshots'].includes(routeInfo().view) && !state.dataReady) await loadData();
+  const route=routeInfo(),view=route.view;state.view=['dashboard','sites','ipam','hosts','routers','services','topology','relations','tools','network-check','host-csv','snapshots'].includes(view)?view:'dashboard';
   document.body.classList.toggle('topology-mode',state.view==='topology');if(state.view!=='topology')document.body.classList.remove('topology-fullscreen');
   if(state.view==='topology')state.topologySite=route.params.get('site')||'';
   if(state.view==='ipam'){state.selectedSite=route.params.get('site')||'';if(state.selectedSite){const site=state.data.sites.find(s=>Number(s.id)===Number(state.selectedSite)),match=state.data.networks.find(n=>Number(n.site_id)===Number(state.selectedSite));if(site?.address_space_id)state.selectedSpace=Number(site.address_space_id);if(match)state.selectedNetwork=Number(match.id);else{state.selectedNetwork=null;state.analysis=null;}}}
   document.querySelectorAll('[data-view]').forEach(a=>a.classList.toggle('active',a.dataset.view===state.view));
-  title.textContent={'host-csv':'CSV-Transfer','network-check':'Netzcheck',dashboard:'Übersicht',sites:'Sites',ipam:'Adressplanung',hosts:'Hosts',routers:'Router',services:'Dienste',topology:'Topologie',relations:'Beziehungen',tools:'Tools'}[state.view];
-  search.disabled = state.view === 'host-csv';
+  title.textContent={snapshots:'Planungssnapshots','host-csv':'CSV-Transfer','network-check':'Netzcheck',dashboard:'Übersicht',sites:'Sites',ipam:'Adressplanung',hosts:'Hosts',routers:'Router',services:'Dienste',topology:'Topologie',relations:'Beziehungen',tools:'Tools'}[state.view];
+  search.disabled = ['host-csv','snapshots'].includes(state.view);
   closeContextMenu();if(state.view!=='topology')state.relationSource=null;
   if (route.params.has('focus')) { state.focusId = route.params.get('focus'); state.query = ''; search.value = ''; }
   if (route.params.has('router')) state.selectedRouter = Number(route.params.get('router'));
@@ -317,6 +338,7 @@ async function render(){
   }
   if (state.view === 'network-check') { app.innerHTML = renderCheckPage(networkCheck.model, {...Object.fromEntries(route.params),q:state.query}); return; }
   if (state.view === 'host-csv') { mountHostCsv(app,{api,onApplied:async()=>{await loadData();if(routeInfo().view!=='host-csv')await render();},onNotice:notify,networks:state.data.networks,virtualNetworks:state.data['virtual-networks']}); return; }
+  if (state.view === 'snapshots') { mountPlanningSnapshots(app,{api,onNotice:notify}); return; }
   if(state.view==='dashboard')renderDashboard();if(state.view==='sites')renderSites();if(state.view==='ipam'){renderIpam();if(state.selectedNetwork){state.analysis=await api(`planner/analyze/${state.selectedNetwork}`);if(state.view==='ipam')renderIpam();}}if(state.view==='hosts')renderHosts();if(state.view==='routers')renderRouters();if(state.view==='services')renderServices();if(state.view==='relations')renderRelations();if(state.view==='topology')await renderTopology();if(state.view==='tools')renderTools();
   if (state.view === 'dashboard') app.insertAdjacentHTML('afterbegin', renderCheckSummary(networkCheck.model));
   if (route.params.has('focus')) scrollToFocus();
@@ -462,4 +484,5 @@ search.addEventListener('input',()=>{state.query=search.value.trim();if(['sites'
 window.addEventListener('hashchange',()=>render().catch(error=>notify(error.message,true)));
 function ipToInt(ip){return ip.split('.').reduce((n,p)=>n*256+Number(p),0);}function intToIp(n){return [24,16,8,0].map(s=>(Math.floor(n/2**s)%256)).join('.');}
 
-(routeInfo().view === 'network-check' ? Promise.resolve() : loadData()).then(render).catch(error=>{app.innerHTML=`<div class="panel empty">${esc(error.message)} <a href="#network-check">Netzcheck öffnen</a></div>`;notify(error.message,true);});
+const snapshotRestoreNotice = consumeSnapshotRestoreNotice();if(snapshotRestoreNotice)notify(snapshotRestoreNotice);
+(['network-check','snapshots'].includes(routeInfo().view) ? Promise.resolve() : loadData()).then(render).catch(error=>{app.innerHTML=`<div class="panel empty">${esc(error.message)} <a href="#network-check">Netzcheck öffnen</a> · <a href="#snapshots">Snapshots öffnen</a></div>`;notify(error.message,true);});

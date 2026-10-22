@@ -3,9 +3,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --test tests/app.test.js tests/network-check.test.js tests/host-csv.test.js",
-    "test:browser": "node --test tests/browser.test.js",
-    "check": "node --check public/assets/app.js && node --check public/assets/network-check.js && node --check public/assets/host-csv.js"
+    "test": "node --test tests/app.test.js tests/network-check.test.js tests/host-csv.test.js tests/planning-snapshots.test.js",
+    "test:browser": "node --test tests/browser.test.js tests/snapshots.browser.test.js tests/planning-epoch.browser.test.js",
+    "check": "node --check public/assets/app.js && node --check public/assets/network-check.js && node --check public/assets/host-csv.js && node --check public/assets/planning-snapshots.js"
   },
   "devDependencies": {
     "playwright": "1.61.1"

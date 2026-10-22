@@ -121,6 +121,8 @@ final class Database
         self::allowSharedVpnInterfaceNames($pdo);
         self::scopeObjectNamesToSites($pdo);
         self::addSiteAllocationMode($pdo);
+        $pdo->exec("INSERT OR IGNORE INTO planning_state(id,restore_epoch) VALUES (1,lower(hex(randomblob(16))))");
+        $pdo->exec('INSERT OR IGNORE INTO schema_migrations(version) VALUES (16)');
     }
 
     private static function addSiteAllocationMode(PDO $pdo):void
