@@ -44,6 +44,7 @@ try {
         $token = $_SERVER['HTTP_X_CSRF_TOKEN'] ?? '';
         if (empty($_SESSION['csrf']) || !hash_equals($_SESSION['csrf'], $token)) error_response('Ungültiges CSRF-Token.', 403);
     }
+    session_write_close();
     $path = routePath();
     $path = preg_replace('#^/api/?#', '', $path);
     $parts = $path === '' ? [] : explode('/', trim($path, '/'));
@@ -53,6 +54,7 @@ try {
     $repo = app_repository();
 
     if ($method === 'GET') {
+        if ($resource === 'network-check') respond(app_network_check()->run());
         if ($resource === 'planner' && ($parts[1] ?? '') === 'analyze' && id_from($parts, 2)) respond(app_planner()->analysis((int)$parts[2]));
         if ($resource === 'planner' && ($parts[1] ?? '') === 'host-candidates') respond(app_planner()->hostCandidates((int)($_GET['site_id'] ?? 0)));
         if ($resource === 'planner' && ($parts[1] ?? '') === 'route-suggestions' && id_from($parts, 2)) respond($repo->routeSuggestions((int)$parts[2]));
@@ -129,6 +131,8 @@ try {
         respond(['deleted'=>true]);
     }
     error_response('Methode oder Endpunkt wird nicht unterstützt.', 405);
+} catch (IpDesigner\SchemaNotReady $error) {
+    error_response($error->getMessage(), 503);
 } catch (InvalidArgumentException $error) {
     error_response($error->getMessage(), 422);
 } catch (DomainException $error) {

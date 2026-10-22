@@ -1,0 +1,27 @@
+.check-summary { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 18px; margin-bottom: 18px; }
+.check-summary h3, .check-summary p { margin: 0 0 8px; }
+.check-counts, .check-filters, .check-object-links { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.check-count { padding: 4px 9px; border-radius: 5px; font-size: 13px; background: #f2f5f7; }
+.check-error { --check-color: #b42318; --check-bg: #fff0ed; }
+.check-warning { --check-color: #916800; --check-bg: #fff9df; }
+.check-info { --check-color: #245b80; --check-bg: #edf6fc; }
+.check-count, .check-level { color: var(--check-color); background: var(--check-bg); }
+.check-stale { color: #805e0a; }
+.check-filters { margin-bottom: 14px; align-items: end; }
+.check-filters label { display: grid; gap: 5px; min-width: 150px; font-size: 13px; }
+.check-filters select { padding: 9px; border: 1px solid #ccd6dc; border-radius: 6px; background: white; }
+.check-results { display: grid; gap: 12px; }
+.check-finding { padding: 16px; border-left: 4px solid var(--check-color); }
+.check-finding header { display: flex; gap: 10px; align-items: center; font-size: 12px; color: #536573; }
+.check-level { padding: 3px 7px; border-radius: 4px; font-weight: 700; }
+.check-finding h3 { margin: 10px 0; font-size: 16px; }
+.check-finding p { margin: 0 0 12px; }
+.check-object-links a { text-decoration: none; }
+.check-marker { cursor: pointer; }
+.check-marker circle { fill: var(--check-color); stroke: white; stroke-width: 2; }
+.check-marker text { fill: white; font-size: 11px; font-weight: 800; pointer-events: none; }
+.check-marker:focus circle { stroke: #172d46; stroke-width: 3; }
+.check-marker-stale { opacity: .5; }
+.host-card.focused, .host-sheet tr.focused, .virtual-network-card.focused { outline: 2px solid #397b9a; outline-offset: -2px; background: #f0f8fc; }
+.topology-check-summary .check-summary { margin-bottom: 10px; padding: 10px 16px; }
+@media (max-width: 700px) { .check-summary { align-items: start; flex-direction: column; } }

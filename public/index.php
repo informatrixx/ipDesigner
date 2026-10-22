@@ -14,7 +14,7 @@ if ($route === '/api' || str_starts_with($route, '/api/')) {
 session_start(['cookie_httponly'=>true,'cookie_samesite'=>'Strict']);
 $_SESSION['csrf'] ??= bin2hex(random_bytes(24));
 header("Content-Security-Policy: default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' data:; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'");
-$assetVersion = max((int) filemtime(__DIR__ . '/assets/app.css'), (int) filemtime(__DIR__ . '/assets/app.js'));
+$assetVersion = max(array_map('filemtime', glob(__DIR__ . '/assets/*.{css,js}', GLOB_BRACE)));
 ?>
 <!doctype html>
 <html lang="de">
@@ -25,6 +25,7 @@ $assetVersion = max((int) filemtime(__DIR__ . '/assets/app.css'), (int) filemtim
   <meta name="app-base" content="<?= htmlspecialchars(url(''), ENT_QUOTES) ?>">
   <title>IP Designer</title>
   <link rel="stylesheet" href="<?= htmlspecialchars(url('/assets/app.css'), ENT_QUOTES) ?>?v=<?= $assetVersion ?>">
+  <link rel="stylesheet" href="<?= htmlspecialchars(url('/assets/network-check.css'), ENT_QUOTES) ?>?v=<?= $assetVersion ?>">
 </head>
 <body>
   <aside class="sidebar">
@@ -37,6 +38,7 @@ $assetVersion = max((int) filemtime(__DIR__ . '/assets/app.css'), (int) filemtim
       <a href="#routers" data-view="routers">Router</a>
       <a href="#services" data-view="services">Dienste</a>
       <a href="#topology" data-view="topology">Topologie</a>
+      <a href="#network-check" data-view="network-check">Netzcheck</a>
       <a href="#relations" data-view="relations">Beziehungen</a>
       <a href="#tools" data-view="tools">Tools</a>
     </nav>

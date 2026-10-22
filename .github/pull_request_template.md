@@ -5,7 +5,8 @@
 ## Prüfschritte
 
 - [ ] `php tests/run.php`
-- [ ] `node --test tests/app.test.js`
+- [ ] `npm test`
+- [ ] `npm run test:browser` (bei Oberflächenänderungen)
 - [ ] PHP-/JavaScript-Syntax geprüft
 - [ ] Dokumentation aktualisiert (falls relevant)
 

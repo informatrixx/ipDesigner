@@ -21,13 +21,20 @@ Commit-Betreffs sind kurz und im Imperativ, zum Beispiel `Fix automatic free IP 
 
 ```bash
 php tests/run.php
-node --test tests/app.test.js
-find src public bin -name '*.php' -print0 | xargs -0 -n1 php -l
-node --check public/assets/app.js
+npm ci
+npm test
+npx playwright install chromium
+npm run test:browser
+find src public bin tests -name '*.php' -print0 | xargs -0 -n1 php -l
+npm run check
 git diff --check
 ```
 
 SQLite-Dateien aus `data/`, lokale Zugangsdaten und produktive Konfiguration dürfen niemals committed werden. Vor Änderungen am Schema zuerst ein Backup der Datenbank erstellen und `php bin/migrate.php` gegen eine Testkopie ausführen.
+
+Die Browsertests verwenden die echte Oberfläche und synthetische, mit PHP erzeugte API-Daten. HTTP wird im Browser abgefangen; die produktive Datenbank und der nginx-Dienst werden nicht angesprochen. PHP-API-Tests prüfen den Frontcontroller separat mit temporären Datenbanken. Unter Linux können für Chromium einmalig Systembibliotheken nötig sein: `npx playwright install --with-deps chromium`.
+
+Neue Logik als eigenständiges Modul ergänzen. Die Netzcheck-Regeln und gemeinsame Kapazitätsberechnung sind ein Beispiel; Quelltextmuster-Tests allein gelten nicht als Verhaltensnachweis.
 
 ## Release
 
