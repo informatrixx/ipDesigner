@@ -26,6 +26,7 @@ $assetVersion = max(array_map('filemtime', glob(__DIR__ . '/assets/*.{css,js}', 
   <title>IP Designer</title>
   <link rel="stylesheet" href="<?= htmlspecialchars(url('/assets/app.css'), ENT_QUOTES) ?>?v=<?= $assetVersion ?>">
   <link rel="stylesheet" href="<?= htmlspecialchars(url('/assets/network-check.css'), ENT_QUOTES) ?>?v=<?= $assetVersion ?>">
+  <link rel="stylesheet" href="<?= htmlspecialchars(url('/assets/host-csv.css'), ENT_QUOTES) ?>?v=<?= $assetVersion ?>">
 </head>
 <body>
   <aside class="sidebar">
@@ -35,6 +36,7 @@ $assetVersion = max(array_map('filemtime', glob(__DIR__ . '/assets/*.{css,js}', 
       <a href="#sites" data-view="sites">Sites</a>
       <a href="#ipam" data-view="ipam">Adressplanung</a>
       <a href="#hosts" data-view="hosts">Hosts</a>
+      <a href="#host-csv" data-view="host-csv">CSV-Transfer</a>
       <a href="#routers" data-view="routers">Router</a>
       <a href="#services" data-view="services">Dienste</a>
       <a href="#topology" data-view="topology">Topologie</a>

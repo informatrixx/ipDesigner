@@ -54,6 +54,8 @@ try {
     $repo = app_repository();
 
     if ($method === 'GET') {
+        if ($resource === 'host-csv' && ($parts[1] ?? '') === 'template') respond(app_host_csv()->template());
+        if ($resource === 'host-csv' && ($parts[1] ?? '') === 'export') respond(app_host_csv()->export($_GET));
         if ($resource === 'network-check') respond(app_network_check()->run());
         if ($resource === 'planner' && ($parts[1] ?? '') === 'analyze' && id_from($parts, 2)) respond(app_planner()->analysis((int)$parts[2]));
         if ($resource === 'planner' && ($parts[1] ?? '') === 'host-candidates') respond(app_planner()->hostCandidates((int)($_GET['site_id'] ?? 0)));
@@ -85,6 +87,8 @@ try {
 
     if ($method === 'POST' || $method === 'PATCH') {
         $input = body();
+        if ($resource === 'host-csv' && ($parts[1] ?? '') === 'preview') respond(app_host_csv()->preview($input));
+        if ($resource === 'host-csv' && ($parts[1] ?? '') === 'apply') respond(app_host_csv()->apply($input));
         if ($resource === 'tools' && ($parts[1] ?? '') === 'ipv4') respond(app_ipv4_calculator()->calculate($input));
         if ($resource === 'planner' && ($parts[1] ?? '') === 'replan-preview') respond(app_replanner()->preview($input));
         if ($resource === 'planner' && ($parts[1] ?? '') === 'apply-replan') respond(app_replanner()->apply($input), 201);

@@ -1,0 +1,24 @@
+.csv-editor,.csv-preview,.csv-help{padding:20px;margin-bottom:18px}
+.csv-transfer{font-size:14px;line-height:1.5}
+.csv-transfer a.button{text-decoration:none;white-space:nowrap}
+.csv-transfer .button:disabled{opacity:.5;cursor:not-allowed}
+.csv-editor .actions{margin-bottom:14px}
+.csv-editor>label:not(.csv-confirm){display:grid;gap:6px;margin:14px 0;font-weight:600}
+.csv-editor textarea{width:100%;max-width:100%;resize:vertical;min-height:180px;font-family:ui-monospace,monospace;font-size:13px;font-weight:400;line-height:1.5;padding:12px;border:1px solid var(--line);border-radius:8px;color:var(--ink);background:#fafcfc}
+.csv-editor textarea:focus{outline:2px solid var(--brand-soft);border-color:var(--brand)}
+.csv-editor input[type=file]{max-width:100%}
+.csv-editor input[type=file]::file-selector-button{border:1px solid var(--line);border-radius:6px;background:#fff;color:var(--ink);padding:7px 10px;margin-right:10px;cursor:pointer}
+.csv-status{margin-top:12px;margin-bottom:0}
+.csv-confirm{display:flex;gap:10px;align-items:flex-start;margin:16px 0;cursor:pointer}
+.csv-confirm input{width:auto;flex:0 0 auto;margin-top:3px}
+.csv-error{color:#a12520;background:#fff0ee;padding:10px;border-radius:6px}
+.csv-status:empty{display:none}
+.csv-preview .table-wrap{margin:16px 0}
+.csv-preview td{vertical-align:top;max-width:450px;overflow-wrap:anywhere}
+.csv-preview td>div{margin:5px 0;font-size:13px}
+.csv-preview del{color:#7b4d4a;text-decoration:none}
+.csv-preview ins{color:#145b3d;text-decoration:none;font-weight:600}
+.csv-help summary,.csv-findings summary{cursor:pointer;font-weight:600}
+.csv-help code{overflow-wrap:anywhere}
+.csv-transfer .actions{flex-wrap:wrap}
+@media(max-width:700px){.csv-editor,.csv-preview,.csv-help{padding:12px}.csv-editor textarea{font-size:12px}}
