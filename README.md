@@ -27,6 +27,12 @@ Der Check läuft beim Aufrufen einer Prüf-/Übersichtsansicht und nach relevant
 
 Es werden keine Geräte gescannt oder automatisch korrigiert. Ein geplanter Gateway ohne Router ist ein Hinweis, bei aktiven Hosts eine Warnung. Auslastungswarnungen beginnen bei 80 %. [Prüfregeln, API und Architektur](docs/NETWORK-CHECK.md) beschreiben Details und Grenzen.
 
+## CSV-Import / Export
+
+Unter **CSV-Transfer** können Hosts und LAN-/VPN-Interfaces in Excel-kompatiblen CSV-Dateien bearbeitet werden. Die Hostliste exportiert auf Wunsch nur die aktuell gefilterten Hosts. Der Import zeigt zuerst sämtliche Änderungen, automatisch vergebene IPs und einen Netzcheck des geplanten Ergebnisses; erst nach ausdrücklicher Bestätigung wird die ganze Datei atomar gespeichert.
+
+Bestehende Datensätze werden ausschließlich über IDs und eine aktivierte Update-Option verändert. Fehlende Zeilen löschen nichts. Mehrere IPs pro Interface, bestehende Pools und absolute FQDNs werden unterstützt. [Format, Bedienung und Grenzen](docs/CSV-TRANSFER.md) beschreiben die Details. CSV ersetzt kein vollständiges SQLite-Backup.
+
 ## Voraussetzungen
 
 - PHP 8.2 oder neuer mit `pdo_sqlite` und `mbstring`

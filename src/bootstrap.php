@@ -6,6 +6,8 @@ require_once __DIR__ . '/DnsName.php';
 require_once __DIR__ . '/Database.php';
 require_once __DIR__ . '/NetworkCapacity.php';
 require_once __DIR__ . '/NetworkCheck.php';
+require_once __DIR__ . '/Csv.php';
+require_once __DIR__ . '/HostCsvTransfer.php';
 require_once __DIR__ . '/Repository.php';
 require_once __DIR__ . '/NetworkPlanner.php';
 require_once __DIR__ . '/DynamicReplanner.php';
@@ -30,6 +32,11 @@ function app_database(): PDO
 function app_network_check(): IpDesigner\NetworkCheck
 {
     return new IpDesigner\NetworkCheck(app_database());
+}
+
+function app_host_csv(): IpDesigner\HostCsvTransfer
+{
+    return new IpDesigner\HostCsvTransfer(app_database());
 }
 
 function app_repository(): Repository
