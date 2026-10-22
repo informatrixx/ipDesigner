@@ -11,6 +11,7 @@ on:
 jobs:
   tests:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
         with:
@@ -24,7 +25,13 @@ jobs:
           node-version: '22'
       - name: Test dependencies
         run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Ubuntu package mirror
+        run: |
+          if [ -f /etc/apt/apt-mirrors.txt ]; then
+            sudo sed -i 's|http://azure.archive.ubuntu.com/ubuntu|http://archive.ubuntu.com/ubuntu|g' /etc/apt/apt-mirrors.txt
+          fi
       - name: Browser dependencies
+        timeout-minutes: 5
         run: npx playwright install --with-deps chromium
       - name: PHP tests
         run: php tests/run.php

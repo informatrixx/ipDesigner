@@ -274,4 +274,24 @@ CREATE TABLE IF NOT EXISTS topology_positions (
     PRIMARY KEY(entity_id, scope)
 );
 
+CREATE TABLE IF NOT EXISTS planning_snapshots (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
+    kind TEXT NOT NULL CHECK (kind IN ('manual','pre_restore')),
+    source_snapshot_id INTEGER,
+    format_version INTEGER NOT NULL,
+    schema_version INTEGER NOT NULL,
+    schema_hash TEXT NOT NULL,
+    payload_hash TEXT NOT NULL,
+    payload TEXT NOT NULL,
+    summary TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS planning_state (
+    id INTEGER PRIMARY KEY CHECK (id=1),
+    restore_epoch TEXT NOT NULL
+);
+
 INSERT OR IGNORE INTO schema_migrations(version) VALUES (1);

@@ -33,6 +33,10 @@ Unter **CSV-Transfer** können Hosts und LAN-/VPN-Interfaces in Excel-kompatible
 
 Bestehende Datensätze werden ausschließlich über IDs und eine aktivierte Update-Option verändert. Fehlende Zeilen löschen nichts. Mehrere IPs pro Interface, bestehende Pools und absolute FQDNs werden unterstützt. [Format, Bedienung und Grenzen](docs/CSV-TRANSFER.md) beschreiben die Details. CSV ersetzt kein vollständiges SQLite-Backup.
 
+## Planungssnapshots
+
+Unter **Snapshots** lassen sich benannte Gesamtstände sichern und nach einer Änderungsvorschau wiederherstellen. Vor jeder Wiederherstellung entsteht automatisch ein Rettungssnapshot. Veraltete Browser-Tabs dürfen danach nicht weiter speichern. Die Funktion benötigt die explizite Migration 16; die übrige Anwendung bleibt mit Schema 15 nutzbar. Snapshots liegen in derselben Datenbank und ersetzen kein externes Backup. [Bedienung, Schutzmechanismen und Aktivierung](docs/PLANNING-SNAPSHOTS.md).
+
 ## Voraussetzungen
 
 - PHP 8.2 oder neuer mit `pdo_sqlite` und `mbstring`

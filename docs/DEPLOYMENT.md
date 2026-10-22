@@ -51,6 +51,12 @@ Nach dem Update PHP-FPM/OPcache nach Bedarf neu laden. Bei nginx-Konfigurations�
 
 Node.js/npm und Chromium sind ausschließlich Entwicklungs- und CI-Abhängigkeiten. Die Laufzeit benötigt weiterhin nur nginx, PHP-FPM und SQLite. Der Netzcheck benötigt keine neue Migration oder zusätzliche Datenbanktabellen.
 
+### Planungssnapshots aktivieren
+
+Die Snapshot-Funktion benötigt Migration 16; bis dahin bleiben die bisherigen Ansichten auf Schema 15 verfügbar. Nur Snapshot-Aufrufe melden den fehlenden Migrationsschritt. Nach Backup und erfolgreichem Test auf einer Kopie im Wartungsfenster `sudo -u www-data php bin/migrate.php` ausführen, anschließend alle Browser-Tabs neu laden. Neben der Datenbank wird beim ersten schreibenden API-Aufruf eine Datei mit dem Suffix `.planning.lock` angelegt; sie muss für PHP-FPM les- und schreibbar sein und darf während des Betriebs nicht gelöscht oder ersetzt werden.
+
+Snapshots liegen in der Hauptdatenbank und vergrößern sie um vollständige Planungsstände. Speicherplatz überwachen, weiterhin extern sichern. Direkte CLI-/SQLite-Schreibzugriffe umgehen die API-Sperren; nicht parallel zum Webbetrieb ausführen. Externe Dateirestores und Migrationen ausschließlich im Wartungsfenster. Details: [Planungssnapshots](PLANNING-SNAPSHOTS.md).
+
 ## Sicherheit
 
 Die Anwendung enthält keine Benutzerverwaltung. Sie muss deshalb durch nginx-Authentifizierung, VPN oder einen anderen vertrauenswürdigen Reverse Proxy geschützt werden. Weitere Hinweise stehen in [SECURITY.md](../SECURITY.md).

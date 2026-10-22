@@ -315,6 +315,9 @@ test('Router verbinden Sites, übernehmen Gateways und erhalten Routenvorschläg
 require __DIR__.'/network-check.php';
 require __DIR__.'/api-check.php';
 require __DIR__.'/host-csv.php';
+require __DIR__.'/planning-snapshots.php';
+require __DIR__.'/planning-write-guard.php';
+require __DIR__.'/snapshots-api.php';
 
 $failed = 0;
 foreach ($tests as $name => $callback) {
