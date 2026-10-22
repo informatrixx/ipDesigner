@@ -199,7 +199,10 @@ test('Snapshot-Restore erkennt konkurrierende Writes und hält bei fremdem Write
         throws(fn()=>$snapshots->restore((int)$saved['id'],$input),DomainException::class);
         equal(2,count($repoA->hosts())); equal(1,count($snapshots->list()));
         $fresh=$snapshots->preview((int)$saved['id']); $input=['revision'=>$fresh['revision'],'plan_hash'=>$fresh['plan_hash'],'confirm_restore'=>true];
-        $a->exec('PRAGMA busy_timeout=1'); $b->exec('BEGIN IMMEDIATE');
+        $a->exec('PRAGMA busy_timeout=1'); $b->beginTransaction();
+        $b->exec("UPDATE sqlite_sequence SET seq=seq WHERE name='planning_snapshots'");
+        throws(fn()=>$snapshots->create(['name'=>'Nicht gespeichert']),PDOException::class);
+        equal(false,$a->inTransaction()); equal(1,count($snapshots->list()));
         throws(fn()=>$snapshots->restore((int)$saved['id'],$input),PDOException::class);
         equal(false,$a->inTransaction()); equal(2,count($repoB->hosts())); equal(1,count($snapshots->list()));
         $b->commit(); $snapshots->restore((int)$saved['id'],$input); equal(1,count($repoB->hosts())); equal(2,count($snapshots->list()));

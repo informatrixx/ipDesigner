@@ -44,8 +44,9 @@ final class PlanningSnapshots
         if ($name === '') throw new InvalidArgumentException('Ein Name für den Snapshot ist erforderlich.');
         $description = self::text($input, 'description', 2000);
         $this->assertReady(); $this->ownTransaction();
-        $this->db->exec('BEGIN IMMEDIATE');
+        $this->db->beginTransaction();
         try {
+            $this->acquireWriteLock();
             $snapshot = $this->store($this->capture(), $name, $description, 'manual');
             $this->db->commit();
             return $snapshot;
@@ -70,8 +71,9 @@ final class PlanningSnapshots
             if (!is_string($input[$key] ?? null) || !preg_match('/^[a-f0-9]{64}$/D', $input[$key])) throw new InvalidArgumentException('Zuerst eine gültige Wiederherstellungsvorschau erstellen.');
         }
         $this->assertReady(); $this->ownTransaction();
-        $this->db->exec('BEGIN IMMEDIATE');
+        $this->db->beginTransaction();
         try {
+            $this->acquireWriteLock();
             $preview = $this->buildPreview($id);
             if (!hash_equals($preview['revision'], $input['revision']) || !hash_equals($preview['plan_hash'], $input['plan_hash'])) throw new DomainException('Planungsstand oder Snapshot wurde seit der Vorschau geändert. Vorschau erneut erstellen.');
             if ($preview['requires_error_confirmation'] && ($input['confirm_errors'] ?? null) !== true) throw new DomainException('Der Zielstand enthält Netzcheck-Fehler. Diese müssen zusätzlich ausdrücklich bestätigt werden.');
@@ -102,6 +104,14 @@ final class PlanningSnapshots
     private function ownTransaction(): void
     {
         if ($this->db->inTransaction()) throw new DomainException('Snapshot-Vorgänge benötigen eine eigene Transaktion.');
+    }
+
+    private function acquireWriteLock(): void
+    {
+        // PHP 8.2 does not track transactions opened with exec('BEGIN IMMEDIATE').
+        // Start through PDO and reserve SQLite's writer before any planning reads.
+        // This no-op also acquires the lock before the first snapshot row exists.
+        $this->db->exec("UPDATE sqlite_sequence SET seq=seq WHERE name='planning_snapshots'");
     }
 
     private function rollback(): void { if ($this->db->inTransaction()) $this->db->rollBack(); }
