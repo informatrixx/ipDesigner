@@ -1,0 +1,13 @@
+{
+  "name": "ip-designer",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test tests/app.test.js tests/network-check.test.js",
+    "test:browser": "node --test tests/browser.test.js",
+    "check": "node --check public/assets/app.js && node --check public/assets/network-check.js"
+  },
+  "devDependencies": {
+    "playwright": "1.61.1"
+  }
+}

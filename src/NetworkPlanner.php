@@ -53,7 +53,7 @@ final class NetworkPlanner
           ((SELECT COUNT(*) FROM network_interfaces i WHERE CASE WHEN n.allocation_type IN ('static_pool','dhcp_pool') THEN i.pool_id=n.id ELSE i.network_id=n.id END)+(SELECT COUNT(*) FROM network_interface_addresses a JOIN network_interfaces i ON i.id=a.interface_id WHERE CASE WHEN n.allocation_type IN ('static_pool','dhcp_pool') THEN i.pool_id=n.id ELSE i.network_id=n.id END)) assigned_count,
           (SELECT COUNT(*) FROM network_reservations r WHERE CASE WHEN n.allocation_type IN ('static_pool','dhcp_pool') THEN r.pool_id=n.id ELSE r.network_id=n.id END) reserved_count
           FROM network_nodes n JOIN entities e ON e.id=n.id JOIN address_spaces a ON a.id=n.address_space_id LEFT JOIN sites s ON s.id=n.site_id $where ORDER BY n.address_space_id,COALESCE(n.parent_id,0),n.sort_order,n.network_int",$spaceId?[$spaceId]:[]);
-        $byId=array_column($rows,null,'id');foreach($rows as &$r){$r=$this->networkOutput($r);$l3=null;for($cursor=(int)$r['id'];isset($byId[$cursor]);$cursor=(int)($byId[$cursor]['parent_id']??0)){if(!empty($byId[$cursor]['l3_enabled'])){$l3=$cursor;break;}if($byId[$cursor]['parent_id']===null)break;}$r['l3_network_id']=$l3;}return $rows;
+        $capacities=NetworkCapacity::load($this->db);$byId=array_column($rows,null,'id');foreach($rows as &$r){$r=array_replace($this->networkOutput($r),$capacities[$r['id']]??[]);$l3=null;$seen=[];for($cursor=(int)$r['id'];isset($byId[$cursor])&&!isset($seen[$cursor]);$seen[$cursor]=true,$cursor=(int)($byId[$cursor]['parent_id']??0)){if(!empty($byId[$cursor]['l3_enabled'])){$l3=$cursor;break;}if($byId[$cursor]['parent_id']===null)break;}$r['l3_network_id']=$l3;}return $rows;
     }
 
     public function network(int $id):array

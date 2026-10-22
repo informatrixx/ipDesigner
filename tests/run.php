@@ -19,6 +19,13 @@ use IpDesigner\Repository;
 use IpDesigner\Ipv4Calculator;
 use function IpDesigner\Http\detectBasePath;
 
+require_once dirname(__DIR__) . '/src/NetworkCapacity.php';
+require_once dirname(__DIR__) . '/src/NetworkCheck.php';
+function testDatabase(string $path): PDO {
+    $db = Database::connect($path);
+    Database::migrate($db);
+    return $db;
+}
 $tests = [];
 function test(string $name, callable $callback): void { global $tests; $tests[$name] = $callback; }
 function equal(mixed $expected, mixed $actual, string $message = ''): void { if ($expected !== $actual) throw new RuntimeException($message ?: 'Erwartet '.var_export($expected,true).', erhalten '.var_export($actual,true)); }
@@ -68,7 +75,7 @@ test('DNS-Namen werden normalisiert und validiert', function (): void {
 
 test('CRUD, Belegung und globale Konflikte', function (): void {
     $path = tempnam(sys_get_temp_dir(), 'ipdesigner-test-');
-    $pdo=Database::connect($path);$repo = new Repository($pdo);$planner=new NetworkPlanner($pdo);
+    $pdo=testDatabase($path);$repo = new Repository($pdo);$planner=new NetworkPlanner($pdo);
     $site = $repo->saveSite(['name'=>'Wien','domain_name'=>'wien.example.at']);
     $other = $repo->saveSite(['name'=>'Graz','domain_name'=>'graz.example.at']);
     $space=$planner->saveSpace(['name'=>'Intern','start_ip'=>'10.20.0.0']);equal(0,count($planner->networks()));
@@ -107,14 +114,14 @@ test('CRUD, Belegung und globale Konflikte', function (): void {
 });
 
 test('Offener Adressraum wächst ausgerichtet und warnt an Privatgrenzen',function():void{
-    $path=tempnam(sys_get_temp_dir(),'ipdesigner-test-');$pdo=Database::connect($path);$repo=new Repository($pdo);$planner=new NetworkPlanner($pdo);$site=$repo->saveSite(['name'=>'Edge','domain_name'=>'edge.example.at']);$space=$planner->saveSpace(['name'=>'Open','start_ip'=>'172.31.255.0']);
+    $path=tempnam(sys_get_temp_dir(),'ipdesigner-test-');$pdo=testDatabase($path);$repo=new Repository($pdo);$planner=new NetworkPlanner($pdo);$site=$repo->saveSite(['name'=>'Edge','domain_name'=>'edge.example.at']);$space=$planner->saveSpace(['name'=>'Open','start_ip'=>'172.31.255.0']);
     $first=$planner->recommendNetwork(['address_space_id'=>$space['id'],'site_id'=>$site['id'],'name'=>'Gross','node_type'=>'leaf','requested_hosts'=>300]);
     equal('172.32.0.0/23',$first['cidr']);equal(true,$first['warning']!=='');
     @unlink($path);@unlink($path.'-wal');@unlink($path.'-shm');
 });
 
 test('Objektnamen sind innerhalb einer Site eindeutig und zwischen Sites wiederverwendbar',function():void{
-    $path=tempnam(sys_get_temp_dir(),'ipdesigner-site-names-');$pdo=Database::connect($path);$repo=new Repository($pdo);$planner=new NetworkPlanner($pdo);$replanner=new DynamicReplanner($pdo);
+    $path=tempnam(sys_get_temp_dir(),'ipdesigner-site-names-');$pdo=testDatabase($path);$repo=new Repository($pdo);$planner=new NetworkPlanner($pdo);$replanner=new DynamicReplanner($pdo);
     $space=$planner->saveSpace(['name'=>'Gemeinsam','start_ip'=>'10.35.0.0']);$home=$repo->saveSite(['address_space_id'=>$space['id'],'name'=>'Home','domain_name'=>'home.example']);$road=$repo->saveSite(['address_space_id'=>$space['id'],'name'=>'Road','domain_name'=>'road.example']);
     $apply=function(array$operation)use($replanner,$space){$preview=$replanner->preview(['address_space_id'=>$space['id'],'operation'=>$operation]);return$replanner->apply(['address_space_id'=>$space['id'],'operation'=>$preview['operation'],'revision'=>$preview['revision'],'plan_hash'=>$preview['plan_hash']]);};
     $homeInfra=$apply(['action'=>'create','node_type'=>'container','name'=>'Infra','site_id'=>$home['id']]);$roadInfra=$apply(['action'=>'create','node_type'=>'container','name'=>'Infra','site_id'=>$road['id']]);
@@ -128,7 +135,7 @@ test('Objektnamen sind innerhalb einer Site eindeutig und zwischen Sites wiederv
 });
 
 test('Site-Kennzahlen und Netz-Metadaten verwenden die aktive Planungsstruktur', function (): void {
-    $path=tempnam(sys_get_temp_dir(),'ipdesigner-test-');$pdo=Database::connect($path);$repo=new Repository($pdo);$planner=new NetworkPlanner($pdo);
+    $path=tempnam(sys_get_temp_dir(),'ipdesigner-test-');$pdo=testDatabase($path);$repo=new Repository($pdo);$planner=new NetworkPlanner($pdo);
     $site=$repo->saveSite(['name'=>'Wien','domain_name'=>'wien.example.at']);$space=$planner->saveSpace(['name'=>'Intern','start_ip'=>'10.40.0.0']);
     $proposal=$planner->recommendNetwork(['address_space_id'=>$space['id'],'site_id'=>$site['id'],'name'=>'Server','node_type'=>'leaf','requested_hosts'=>20,'prefix'=>27]);
     $network=$planner->applyNetwork(['input'=>$proposal['input'],'expected_cidr'=>$proposal['cidr'],'revision'=>$proposal['revision']]);
@@ -143,7 +150,7 @@ test('Site-Kennzahlen und Netz-Metadaten verwenden die aktive Planungsstruktur',
 });
 
 test('Dynamischer Replan wächst, respektiert Reihenfolge und kann zurückgerollt werden', function (): void {
-    $path=tempnam(sys_get_temp_dir(),'ipdesigner-dynamic-');$pdo=Database::connect($path);$repo=new Repository($pdo);$planner=new NetworkPlanner($pdo);$replanner=new DynamicReplanner($pdo);
+    $path=tempnam(sys_get_temp_dir(),'ipdesigner-dynamic-');$pdo=testDatabase($path);$repo=new Repository($pdo);$planner=new NetworkPlanner($pdo);$replanner=new DynamicReplanner($pdo);
     $site=$repo->saveSite(['name'=>'Dynamic','domain_name'=>'dynamic.example']);$space=$planner->saveSpace(['name'=>'Main','start_ip'=>'172.20.0.0','routing_domain'=>'default']);
     $first=$replanner->preview(['address_space_id'=>$space['id'],'operation'=>['action'=>'create','node_type'=>'leaf','name'=>'Small','site_id'=>$site['id'],'requested_hosts'=>10,'reserve_percent'=>25]]);equal('172.20.0.0/28',$first['effective_cidr']);$createdA=$replanner->apply(['address_space_id'=>$space['id'],'operation'=>$first['operation'],'revision'=>$first['revision'],'plan_hash'=>$first['plan_hash']]);
     $second=$replanner->preview(['address_space_id'=>$space['id'],'operation'=>['action'=>'create','node_type'=>'leaf','name'=>'Large','site_id'=>$site['id'],'requested_hosts'=>100,'reserve_percent'=>25]]);equal('172.20.0.0/24',$second['effective_cidr']);$createdB=$replanner->apply(['address_space_id'=>$space['id'],'operation'=>$second['operation'],'revision'=>$second['revision'],'plan_hash'=>$second['plan_hash']]);
@@ -158,7 +165,7 @@ test('Dynamischer Replan wächst, respektiert Reihenfolge und kann zurückgeroll
 });
 
 test('Dynamische Subnetze akzeptieren einen optionalen festen Präfix', function (): void {
-    $path=tempnam(sys_get_temp_dir(),'ipdesigner-prefix-');$pdo=Database::connect($path);$repo=new Repository($pdo);$planner=new NetworkPlanner($pdo);$replanner=new DynamicReplanner($pdo);
+    $path=tempnam(sys_get_temp_dir(),'ipdesigner-prefix-');$pdo=testDatabase($path);$repo=new Repository($pdo);$planner=new NetworkPlanner($pdo);$replanner=new DynamicReplanner($pdo);
     $space=$planner->saveSpace(['name'=>'Prefixraum','start_ip'=>'10.60.0.0']);$site=$repo->saveSite(['address_space_id'=>$space['id'],'name'=>'Prefix Site','domain_name'=>'prefix.example']);
     $fixed=$replanner->preview(['address_space_id'=>$space['id'],'operation'=>['action'=>'create','node_type'=>'leaf','name'=>'Fest','site_id'=>$site['id'],'prefix'=>'/24','requested_hosts'=>10]]);equal('10.60.0.0/24',$fixed['effective_cidr']);equal(24,$fixed['plan']['nodes'][0]['manual_prefix']);
     $created=$replanner->apply(['address_space_id'=>$space['id'],'operation'=>$fixed['operation'],'revision'=>$fixed['revision'],'plan_hash'=>$fixed['plan_hash']]);$network=$planner->network((int)$created['created_id']);equal('10.60.0.0/24',$network['cidr']);equal(24,(int)$network['manual_prefix']);
@@ -170,7 +177,7 @@ test('Dynamische Subnetze akzeptieren einen optionalen festen Präfix', function
 });
 
 test('Subnetze können optional an einer festen Start-IP platziert werden', function (): void {
-    $path=tempnam(sys_get_temp_dir(),'ipdesigner-start-');$pdo=Database::connect($path);$repo=new Repository($pdo);$planner=new NetworkPlanner($pdo);$replanner=new DynamicReplanner($pdo);
+    $path=tempnam(sys_get_temp_dir(),'ipdesigner-start-');$pdo=testDatabase($path);$repo=new Repository($pdo);$planner=new NetworkPlanner($pdo);$replanner=new DynamicReplanner($pdo);
     $space=$planner->saveSpace(['name'=>'Startraum','start_ip'=>'10.70.0.0']);$site=$repo->saveSite(['address_space_id'=>$space['id'],'name'=>'Start Site','domain_name'=>'start.example']);
     $fixed=$replanner->preview(['address_space_id'=>$space['id'],'operation'=>['action'=>'create','node_type'=>'leaf','name'=>'Fest platziert','site_id'=>$site['id'],'prefix'=>'/26','start_ip'=>'10.70.1.64','requested_hosts'=>10]]);equal('10.70.1.64/26',$fixed['plan']['nodes'][0]['cidr']);equal(IpMath::toInt('10.70.1.64'),$fixed['plan']['nodes'][0]['manual_start_int']);equal('10.70.0.0/23',$fixed['effective_cidr']);
     $created=$replanner->apply(['address_space_id'=>$space['id'],'operation'=>$fixed['operation'],'revision'=>$fixed['revision'],'plan_hash'=>$fixed['plan_hash']]);$network=$planner->network((int)$created['created_id']);equal('10.70.1.64/26',$network['cidr']);equal('10.70.1.64',$network['manual_start_ip']);
@@ -182,7 +189,7 @@ test('Subnetze können optional an einer festen Start-IP platziert werden', func
 });
 
 test('Belegte Adressräume lassen sich mit festen Ankern atomar verschieben und zurückrollen', function (): void {
-    $path=tempnam(sys_get_temp_dir(),'ipdesigner-relocate-');$pdo=Database::connect($path);$repo=new Repository($pdo);$planner=new NetworkPlanner($pdo);$replanner=new DynamicReplanner($pdo);
+    $path=tempnam(sys_get_temp_dir(),'ipdesigner-relocate-');$pdo=testDatabase($path);$repo=new Repository($pdo);$planner=new NetworkPlanner($pdo);$replanner=new DynamicReplanner($pdo);
     $space=$planner->saveSpace(['name'=>'AutAsp','start_ip'=>'172.21.10.0']);$site=$repo->saveSite(['address_space_id'=>$space['id'],'name'=>'Aut','domain_name'=>'aut.example']);
     $apply=function(array$operation)use($replanner,$space){$preview=$replanner->preview(['address_space_id'=>$space['id'],'operation'=>$operation]);return$replanner->apply(['address_space_id'=>$space['id'],'operation'=>$preview['operation'],'revision'=>$preview['revision'],'plan_hash'=>$preview['plan_hash']]);};
     $lan=(int)$apply(['action'=>'create','node_type'=>'leaf','name'=>'LAN klein','site_id'=>$site['id'],'requested_hosts'=>0])['created_id'];$anchored=(int)$apply(['action'=>'create','node_type'=>'leaf','name'=>'LAN L3','site_id'=>$site['id'],'prefix'=>'/24','start_ip'=>'172.21.11.0','requested_hosts'=>10])['created_id'];
@@ -195,7 +202,7 @@ test('Belegte Adressräume lassen sich mit festen Ankern atomar verschieben und 
 });
 
 test('Netze lassen sich atomar gruppieren, verschachteln und zurückwandeln', function (): void {
-    $path=tempnam(sys_get_temp_dir(),'ipdesigner-tree-');$pdo=Database::connect($path);$repo=new Repository($pdo);$planner=new NetworkPlanner($pdo);$replanner=new DynamicReplanner($pdo);$space=$planner->saveSpace(['name'=>'Baum','start_ip'=>'10.70.0.0']);$site=$repo->saveSite(['address_space_id'=>$space['id'],'name'=>'Baum Site','domain_name'=>'baum.example']);
+    $path=tempnam(sys_get_temp_dir(),'ipdesigner-tree-');$pdo=testDatabase($path);$repo=new Repository($pdo);$planner=new NetworkPlanner($pdo);$replanner=new DynamicReplanner($pdo);$space=$planner->saveSpace(['name'=>'Baum','start_ip'=>'10.70.0.0']);$site=$repo->saveSite(['address_space_id'=>$space['id'],'name'=>'Baum Site','domain_name'=>'baum.example']);
     $apply=function(array$operation)use($replanner,$space){$preview=$replanner->preview(['address_space_id'=>$space['id'],'operation'=>$operation]);return$replanner->apply(['address_space_id'=>$space['id'],'operation'=>$preview['operation'],'revision'=>$preview['revision'],'plan_hash'=>$preview['plan_hash']]);};
     $make=function(string$name)use($apply,$site){return(int)$apply(['action'=>'create','node_type'=>'leaf','name'=>$name,'site_id'=>$site['id'],'requested_hosts'=>5])['created_id'];};$a=$make('A');$b=$make('B');$c=$make('C');$apply(['action'=>'reparent','ids'=>[$c],'parent_id'=>null,'anchor_id'=>$a,'position'=>'before']);$roots=array_values(array_filter($planner->networks(),fn($network)=>$network['parent_id']===null));equal([$c,$a,$b],array_map(fn($network)=>(int)$network['id'],$roots));
     $wrapped=$apply(['action'=>'wrap','ids'=>[$a,$b],'wrapper_role'=>'aggregate','name'=>'AB-Supernetz','prefix'=>'/24']);$aggregate=(int)$wrapped['created_id'];$nets=array_column($planner->networks(),null,'id');equal('aggregate',$nets[$aggregate]['node_role']);equal(24,(int)$nets[$aggregate]['manual_prefix']);equal($aggregate,(int)$nets[$a]['parent_id']);equal($aggregate,(int)$nets[$b]['parent_id']);
@@ -210,7 +217,7 @@ test('Netze lassen sich atomar gruppieren, verschachteln und zurückwandeln', fu
 });
 
 test('Gemeinsames L3-Subnetz nutzt statische und DHCP-Adresspools', function (): void {
-    $path=tempnam(sys_get_temp_dir(),'ipdesigner-l3-');$pdo=Database::connect($path);$repo=new Repository($pdo);$planner=new NetworkPlanner($pdo);$replanner=new DynamicReplanner($pdo);$space=$planner->saveSpace(['name'=>'L3','start_ip'=>'172.20.1.0']);$site=$repo->saveSite(['address_space_id'=>$space['id'],'name'=>'L3 Site','domain_name'=>'l3.example']);
+    $path=tempnam(sys_get_temp_dir(),'ipdesigner-l3-');$pdo=testDatabase($path);$repo=new Repository($pdo);$planner=new NetworkPlanner($pdo);$replanner=new DynamicReplanner($pdo);$space=$planner->saveSpace(['name'=>'L3','start_ip'=>'172.20.1.0']);$site=$repo->saveSite(['address_space_id'=>$space['id'],'name'=>'L3 Site','domain_name'=>'l3.example']);
     $apply=function(array$operation)use($replanner,$space){$preview=$replanner->preview(['address_space_id'=>$space['id'],'operation'=>$operation]);return$replanner->apply(['address_space_id'=>$space['id'],'operation'=>$preview['operation'],'revision'=>$preview['revision'],'plan_hash'=>$preview['plan_hash']]);};$make=function($name)use($apply,$site){return(int)$apply(['action'=>'create','node_type'=>'leaf','name'=>$name,'site_id'=>$site['id'],'prefix'=>'/26'])['created_id'];};$static=$make('Statisch');$dynamic=$make('Dynamisch');$parent=(int)$apply(['action'=>'wrap','ids'=>[$static,$dynamic],'wrapper_role'=>'aggregate','name'=>'Clientnetz','prefix'=>'/25'])['created_id'];
     $router=$repo->saveRouter(['site_id'=>$site['id'],'name'=>'R-L3','hostname'=>'r-l3']);$gateway=$repo->saveInterface(['host_id'=>$router['id'],'network_id'=>$static,'name'=>'lan0']);equal('172.20.1.1',$gateway['ip']);$host=$repo->saveHost(['site_id'=>$site['id'],'name'=>'Altgerät','hostname'=>'alt']);$old=$repo->saveInterface(['host_id'=>$host['id'],'network_id'=>$static,'name'=>'eth0','ip'=>'172.20.1.2']);
     $activated=$apply(['action'=>'activate_l3','id'=>$parent,'pool_type'=>'static_pool','gateway'=>'172.20.1.1']);$networks=array_column($planner->networks(),null,'id');equal('l3_subnet',$networks[$parent]['node_role']);equal('static_pool',$networks[$static]['node_role']);equal(0,(int)$networks[$static]['pool_range_fixed']);equal('172.20.1.2',$networks[$static]['range_start']);equal('172.20.1.63',$networks[$static]['range_end']);equal('172.20.1.64',$networks[$dynamic]['range_start']);equal('172.20.1.126',$networks[$dynamic]['range_end']);$interfaces=array_column($repo->interfaces(),null,'id');equal($parent,(int)$interfaces[$old['id']]['network_id']);equal($static,(int)$interfaces[$old['id']]['pool_id']);equal($parent,(int)$interfaces[$gateway['id']]['network_id']);equal(null,$interfaces[$gateway['id']]['pool_id']);$siteStats=$repo->sites()[0];equal(1,(int)$siteStats['subnet_count']);equal(2,(int)$siteStats['pool_count']);$dashboard=$repo->dashboard();equal(1,$dashboard['subnets']);equal(2,$dashboard['pools']);$topologyRoles=array_column(array_filter($repo->topology()['nodes'],fn($n)=>isset($n['node_role'])),'node_role','id');equal('l3_subnet',$topologyRoles[$parent]);equal('static_pool',$topologyRoles[$static]);throws(fn()=>$replanner->preview(['address_space_id'=>$space['id'],'operation'=>['action'=>'convert_container_role','id'=>$parent,'target_role'=>'group']]),DomainException::class);
@@ -222,7 +229,7 @@ test('Gemeinsames L3-Subnetz nutzt statische und DHCP-Adresspools', function ():
 });
 
 test('Globale VPN- und Docker-Netze bleiben fest und verbinden sitefremde Geräte',function():void{
-    $path=tempnam(sys_get_temp_dir(),'ipdesigner-virtual-');$pdo=Database::connect($path);$repo=new Repository($pdo);$planner=new NetworkPlanner($pdo);$replanner=new DynamicReplanner($pdo);$space=$planner->saveSpace(['name'=>'Dynamisch','start_ip'=>'10.44.0.0']);$a=$repo->saveSite(['address_space_id'=>$space['id'],'name'=>'Wien','domain_name'=>'wien.vpn.example']);$b=$repo->saveSite(['address_space_id'=>$space['id'],'name'=>'Graz','domain_name'=>'graz.vpn.example']);
+    $path=tempnam(sys_get_temp_dir(),'ipdesigner-virtual-');$pdo=testDatabase($path);$repo=new Repository($pdo);$planner=new NetworkPlanner($pdo);$replanner=new DynamicReplanner($pdo);$space=$planner->saveSpace(['name'=>'Dynamisch','start_ip'=>'10.44.0.0']);$a=$repo->saveSite(['address_space_id'=>$space['id'],'name'=>'Wien','domain_name'=>'wien.vpn.example']);$b=$repo->saveSite(['address_space_id'=>$space['id'],'name'=>'Graz','domain_name'=>'graz.vpn.example']);
     $initial=$replanner->apply(['address_space_id'=>$space['id'],'operation'=>['action'=>'create','node_type'=>'leaf','name'=>'LAN','site_id'=>$a['id'],'prefix'=>'/29']]);$r1=$repo->saveRouter(['site_id'=>$a['id'],'name'=>'VPN-R1','hostname'=>'vpn-r1']);$r2=$repo->saveRouter(['site_id'=>$b['id'],'name'=>'VPN-R2','hostname'=>'vpn-r2']);$host=$repo->saveHost(['site_id'=>$a['id'],'name'=>'Dockerhost','hostname'=>'docker']);
     $vpn=$repo->saveVirtualNetwork(['network_type'=>'vpn','name'=>'WireGuard Backbone','cidr'=>'100.64.0.0/29']);equal('vpn',$vpn['network_type']);$v1=$repo->saveVpnInterface(['virtual_network_id'=>$vpn['id'],'router_id'=>$r1['id'],'name'=>'wg0','ips'=>['100.64.0.1','100.64.0.3']]);$repo->saveVpnInterface(['virtual_network_id'=>$vpn['id'],'router_id'=>$r2['id'],'name'=>'wg0','ip'=>'100.64.0.2']);equal(['100.64.0.1','100.64.0.3'],$v1['ips']);$vpn2=$repo->saveVirtualNetwork(['network_type'=>'vpn','name'=>'WireGuard Partner','cidr'=>'100.64.0.8/29']);$shared=$repo->saveVpnInterface(['virtual_network_id'=>$vpn2['id'],'router_id'=>$r1['id'],'name'=>'wg0','ip'=>'100.64.0.9']);equal('wg0',$shared['name']);equal(true,count(array_filter($repo->routerRoutes((int)$r1['id']),fn($route)=>$route['id']==='vpn-connected-'.$v1['id']))===1);throws(fn()=>$repo->saveVpnInterface(['virtual_network_id'=>$vpn['id'],'router_id'=>$r2['id'],'name'=>'wg1','ip'=>'100.64.0.3']),DomainException::class);throws(fn()=>$repo->deleteVirtualNetwork((int)$vpn['id']),DomainException::class);
     $dockerA=$repo->saveVirtualNetwork(['network_type'=>'docker_bridge','name'=>'docker0-a','cidr'=>'172.17.0.0/16','owner_host_id'=>$host['id']]);equal('172.17.0.1',$dockerA['gateway']);$dockerB=$repo->saveVirtualNetwork(['network_type'=>'docker_bridge','name'=>'docker0-b','cidr'=>'172.17.0.0/16','owner_host_id'=>$r2['id']]);equal('bridge',$dockerB['driver']);throws(fn()=>$repo->saveVirtualNetwork(['network_type'=>'docker_bridge','name'=>'docker-overlap','cidr'=>'172.17.1.0/24','owner_host_id'=>$host['id']]),DomainException::class);throws(fn()=>$repo->saveVirtualNetwork(['network_type'=>'vpn','name'=>'VPN-Kollision','cidr'=>'172.17.0.0/24']),DomainException::class);throws(fn()=>$repo->saveVirtualNetwork(['network_type'=>'vpn','name'=>'LAN-Kollision','cidr'=>'10.44.0.0/29']),DomainException::class);
@@ -231,7 +238,7 @@ test('Globale VPN- und Docker-Netze bleiben fest und verbinden sitefremde Gerät
 });
 
 test('VPN-Netze reservieren Lücken im dynamischen Plan und verschieben Interface-IPs atomar',function():void{
-    $path=tempnam(sys_get_temp_dir(),'ipdesigner-vpn-prefix-');$pdo=Database::connect($path);$repo=new Repository($pdo);$planner=new NetworkPlanner($pdo);$replanner=new DynamicReplanner($pdo);
+    $path=tempnam(sys_get_temp_dir(),'ipdesigner-vpn-prefix-');$pdo=testDatabase($path);$repo=new Repository($pdo);$planner=new NetworkPlanner($pdo);$replanner=new DynamicReplanner($pdo);
     $space=$planner->saveSpace(['name'=>'MoCu','start_ip'=>'172.20.1.0']);$site=$repo->saveSite(['address_space_id'=>$space['id'],'name'=>'Home','domain_name'=>'home.example']);
     $apply=function(array$operation)use($replanner,$space){$preview=$replanner->preview(['address_space_id'=>$space['id'],'operation'=>$operation]);return$replanner->apply(['address_space_id'=>$space['id'],'operation'=>$preview['operation'],'revision'=>$preview['revision'],'plan_hash'=>$preview['plan_hash']]);};
     $apply(['action'=>'create','node_type'=>'leaf','name'=>'Erster Bereich','site_id'=>$site['id'],'prefix'=>'/24']);$apply(['action'=>'create','node_type'=>'leaf','name'=>'Zweiter Bereich','site_id'=>$site['id'],'prefix'=>'/24']);
@@ -245,7 +252,7 @@ test('VPN-Netze reservieren Lücken im dynamischen Plan und verschieben Interfac
 });
 
 test('Ein VPN an beliebiger freier Position wird bei späterem Wachstum übersprungen',function():void{
-    $path=tempnam(sys_get_temp_dir(),'ipdesigner-vpn-gap-');$pdo=Database::connect($path);$repo=new Repository($pdo);$planner=new NetworkPlanner($pdo);$replanner=new DynamicReplanner($pdo);
+    $path=tempnam(sys_get_temp_dir(),'ipdesigner-vpn-gap-');$pdo=testDatabase($path);$repo=new Repository($pdo);$planner=new NetworkPlanner($pdo);$replanner=new DynamicReplanner($pdo);
     $space=$planner->saveSpace(['name'=>'Mit VPN-Lücke','start_ip'=>'10.50.0.0']);$site=$repo->saveSite(['address_space_id'=>$space['id'],'name'=>'Site','domain_name'=>'site.example']);$repo->saveVirtualNetwork(['network_type'=>'vpn','name'=>'VPN-Mitte','cidr'=>'10.50.1.0/24']);
     $apply=function(string$name)use($replanner,$space,$site):void{$preview=$replanner->preview(['address_space_id'=>$space['id'],'operation'=>['action'=>'create','node_type'=>'leaf','name'=>$name,'site_id'=>$site['id'],'prefix'=>'/24']]);$replanner->apply(['address_space_id'=>$space['id'],'operation'=>$preview['operation'],'revision'=>$preview['revision'],'plan_hash'=>$preview['plan_hash']]);};
     $apply('Vor VPN');$apply('Nach VPN');$planned=array_column($planner->networks((int)$space['id']),null,'name');equal('10.50.0.0/24',$planned['Vor VPN']['cidr']);equal('10.50.2.0/24',$planned['Nach VPN']['cidr']);
@@ -253,7 +260,7 @@ test('Ein VPN an beliebiger freier Position wird bei späterem Wachstum überspr
 });
 
 test('Sites können zwischen kompakter IP-Range und aggregierbarem CIDR-Block wechseln',function():void{
-    $path=tempnam(sys_get_temp_dir(),'ipdesigner-site-mode-');$pdo=Database::connect($path);$repo=new Repository($pdo);$planner=new NetworkPlanner($pdo);$replanner=new DynamicReplanner($pdo);
+    $path=tempnam(sys_get_temp_dir(),'ipdesigner-site-mode-');$pdo=testDatabase($path);$repo=new Repository($pdo);$planner=new NetworkPlanner($pdo);$replanner=new DynamicReplanner($pdo);
     $space=$planner->saveSpace(['name'=>'Site-Modi','start_ip'=>'10.51.0.0']);$site=$repo->saveSite(['address_space_id'=>$space['id'],'name'=>'Home','domain_name'=>'home.example','allocation_mode'=>'range']);$repo->saveVirtualNetwork(['network_type'=>'vpn','name'=>'VPN','cidr'=>'10.51.0.0/24']);
     $applyCreate=function(string$name,string$prefix)use($replanner,$space,$site):void{$preview=$replanner->preview(['address_space_id'=>$space['id'],'operation'=>['action'=>'create','node_type'=>'leaf','name'=>$name,'site_id'=>$site['id'],'prefix'=>$prefix]]);$replanner->apply(['address_space_id'=>$space['id'],'operation'=>$preview['operation'],'revision'=>$preview['revision'],'plan_hash'=>$preview['plan_hash']]);};$applyCreate('Infra','/27');$applyCreate('Clients','/24');
     $range=array_column($planner->networks((int)$space['id']),null,'name');equal('10.51.1.0/27',$range['Infra']['cidr']);equal('10.51.2.0/24',$range['Clients']['cidr']);
@@ -264,7 +271,7 @@ test('Sites können zwischen kompakter IP-Range und aggregierbarem CIDR-Block we
 
 test('VLSM plant und übernimmt atomar', function (): void {
     $path = tempnam(sys_get_temp_dir(), 'ipdesigner-test-');
-    $repo = new Repository(Database::connect($path));
+    $repo = new Repository(testDatabase($path));
     $site=$repo->saveSite(['name'=>'Lab','domain_name'=>'lab.example.at']);$block=$repo->saveBlock(['site_id'=>$site['id'],'name'=>'Labnetz','cidr'=>'172.16.0.0/24']);
     $requests=[['name'=>'Clients','hosts'=>100],['name'=>'Server','hosts'=>40],['name'=>'P2P','prefix'=>31]];
     $plan=$repo->planSubnets((int)$block['id'],$requests);
@@ -276,7 +283,7 @@ test('VLSM plant und übernimmt atomar', function (): void {
 });
 
 test('Adressräume sind Topologieobjekte und Sites eindeutig zugeordnet', function (): void {
-    $path=tempnam(sys_get_temp_dir(),'ipdesigner-hierarchy-');$pdo=Database::connect($path);$repo=new Repository($pdo);$planner=new NetworkPlanner($pdo);$replanner=new DynamicReplanner($pdo);
+    $path=tempnam(sys_get_temp_dir(),'ipdesigner-hierarchy-');$pdo=testDatabase($path);$repo=new Repository($pdo);$planner=new NetworkPlanner($pdo);$replanner=new DynamicReplanner($pdo);
     $space=$planner->saveSpace(['name'=>'Global','start_ip'=>'10.80.0.0']);$other=$planner->saveSpace(['name'=>'Isoliert','start_ip'=>'10.90.0.0','routing_domain'=>'isoliert']);
     $site=$repo->saveSite(['address_space_id'=>$space['id'],'name'=>'Wien','domain_name'=>'wien.example']);
     equal((int)$space['id'],(int)$repo->sites()[0]['address_space_id']);
@@ -289,7 +296,7 @@ test('Adressräume sind Topologieobjekte und Sites eindeutig zugeordnet', functi
 });
 
 test('Belegte Site wird mit Quell- und Zielraum atomar verschoben', function (): void {
-    $path=tempnam(sys_get_temp_dir(),'ipdesigner-move-');$pdo=Database::connect($path);$repo=new Repository($pdo);$planner=new NetworkPlanner($pdo);$replanner=new DynamicReplanner($pdo);
+    $path=tempnam(sys_get_temp_dir(),'ipdesigner-move-');$pdo=testDatabase($path);$repo=new Repository($pdo);$planner=new NetworkPlanner($pdo);$replanner=new DynamicReplanner($pdo);
     $source=$planner->saveSpace(['name'=>'Quelle','start_ip'=>'10.100.0.0','routing_domain'=>'source']);$target=$planner->saveSpace(['name'=>'Ziel','start_ip'=>'10.200.0.0','routing_domain'=>'target']);$site=$repo->saveSite(['address_space_id'=>$source['id'],'name'=>'Move','domain_name'=>'move.example']);
     $created=$replanner->apply(['address_space_id'=>$source['id'],'operation'=>['action'=>'create','node_type'=>'leaf','name'=>'LAN','site_id'=>$site['id'],'requested_hosts'=>20]]);$placed=$planner->applyHost(['network_id'=>$created['created_id'],'host'=>['name'=>'Mover','hostname'=>'mover']]);
     $request=['site_id'=>$site['id'],'target_address_space_id'=>$target['id'],'site'=>['name'=>'Move','domain_name'=>'move.example','location'=>'','description'=>'']];$preview=$replanner->previewSiteMove($request);equal(true,$preview['site_move']);
@@ -298,12 +305,15 @@ test('Belegte Site wird mit Quell- und Zielraum atomar verschoben', function ():
 });
 
 test('Router verbinden Sites, übernehmen Gateways und erhalten Routenvorschläge', function (): void {
-    $path=tempnam(sys_get_temp_dir(),'ipdesigner-router-');$pdo=Database::connect($path);$repo=new Repository($pdo);$planner=new NetworkPlanner($pdo);$replanner=new DynamicReplanner($pdo);$space=$planner->saveSpace(['name'=>'Routerraum','start_ip'=>'10.210.0.0']);$a=$repo->saveSite(['address_space_id'=>$space['id'],'name'=>'A','domain_name'=>'a.example']);$b=$repo->saveSite(['address_space_id'=>$space['id'],'name'=>'B','domain_name'=>'b.example']);
+    $path=tempnam(sys_get_temp_dir(),'ipdesigner-router-');$pdo=testDatabase($path);$repo=new Repository($pdo);$planner=new NetworkPlanner($pdo);$replanner=new DynamicReplanner($pdo);$space=$planner->saveSpace(['name'=>'Routerraum','start_ip'=>'10.210.0.0']);$a=$repo->saveSite(['address_space_id'=>$space['id'],'name'=>'A','domain_name'=>'a.example']);$b=$repo->saveSite(['address_space_id'=>$space['id'],'name'=>'B','domain_name'=>'b.example']);
     $create=function($name,$site,$hosts)use($replanner,$space){$p=$replanner->preview(['address_space_id'=>$space['id'],'operation'=>['action'=>'create','node_type'=>'leaf','name'=>$name,'site_id'=>$site['id'],'requested_hosts'=>$hosts]]);return$replanner->apply(['address_space_id'=>$space['id'],'operation'=>$p['operation'],'revision'=>$p['revision'],'plan_hash'=>$p['plan_hash']])['created_id'];};$transit=$create('Transit',$a,10);$lanB=$create('LAN-B',$b,20);$transitNet=$planner->network($transit);$lanBNet=$planner->network($lanB);
     $r1=$repo->saveRouter(['site_id'=>$a['id'],'name'=>'R1','hostname'=>'r1']);$r2=$repo->saveRouter(['site_id'=>$b['id'],'name'=>'R2','hostname'=>'r2']);$tp=IpMath::parseCidr($transitNet['cidr']);$bp=IpMath::parseCidr($lanBNet['cidr']);$r1t=$repo->saveInterface(['host_id'=>$r1['id'],'network_id'=>$transit,'name'=>'wan0','ip'=>IpMath::toIp($tp['network']+2)]);throws(fn()=>$repo->saveInterface(['host_id'=>$r2['id'],'network_id'=>$transit,'name'=>'wan0','ip'=>IpMath::toIp($tp['network']+3)]),DomainException::class);$r2t=$repo->saveInterface(['host_id'=>$r2['id'],'network_id'=>$transit,'name'=>'wan0','ip'=>IpMath::toIp($tp['network']+3),'allow_cross_site'=>1]);$gateway=$repo->saveInterface(['host_id'=>$r2['id'],'network_id'=>$lanB,'name'=>'lan0']);equal(IpMath::toIp($bp['network']+1),$gateway['ip']);equal(1,(int)$gateway['is_gateway']);
     $suggestions=$repo->routeSuggestions((int)$r1['id']);equal($lanBNet['cidr'],$suggestions[0]['destination_cidr']);$route=$repo->saveStaticRoute($suggestions[0]);equal(IpMath::toIp($tp['network']+3),$route['next_hop']);equal(1,count(array_filter($repo->routerRoutes((int)$r1['id']),fn($r)=>$r['route_type']==='static')));
     @unlink($path);@unlink($path.'-wal');@unlink($path.'-shm');
 });
+
+require __DIR__.'/network-check.php';
+require __DIR__.'/api-check.php';
 
 $failed = 0;
 foreach ($tests as $name => $callback) {

@@ -89,17 +89,15 @@ final class Repository
             (SELECT COUNT(*) FROM hosts h WHERE h.site_id=s.id) host_count,
             (SELECT COUNT(*) FROM services v JOIN hosts h ON h.id=v.host_id WHERE h.site_id=s.id) service_count
             FROM sites s LEFT JOIN address_spaces a ON a.id=s.address_space_id ORDER BY COALESCE(a.start_int,4294967295),s.sort_order,s.name");
+        $capacities = NetworkCapacity::load($this->db);
+        $capacityNodes = $this->all("SELECT id,site_id,node_type,l3_enabled,allocation_type FROM network_nodes");
         foreach ($sites as &$site) {
-            $leaves = $this->all("SELECT n.cidr,
-                ((SELECT COUNT(*) FROM network_interfaces i WHERE i.network_id=n.id)+(SELECT COUNT(*) FROM network_interface_addresses a JOIN network_interfaces i ON i.id=a.interface_id WHERE i.network_id=n.id)) assigned_count,
-                (SELECT COUNT(*) FROM network_reservations r WHERE r.network_id=n.id) reserved_count
-                FROM network_nodes n WHERE n.site_id=? AND ((n.node_type='leaf' AND n.allocation_type='subnet') OR n.l3_enabled=1)", [(int)$site['id']]);
-            $usable = 0;
-            $occupied = 0;
-            foreach ($leaves as $leaf) {
-                $parsed = IpMath::parseCidr($leaf['cidr']);
-                $usable += max(0, (int)$parsed['usable'] - 1);
-                $occupied += (int)$leaf['assigned_count'] + (int)$leaf['reserved_count'];
+            $usable = $occupied = 0;
+            foreach ($capacityNodes as $node) {
+                if ((int)$node['site_id'] !== (int)$site['id'] || !NetworkCapacity::isL3($node)) continue;
+                $usage = $capacities[$node['id']] ?? [];
+                $usable += $usage['host_capacity'] ?? 0;
+                $occupied += $usage['occupied_count'] ?? 0;
             }
             $site['block_count'] = (int)$site['area_count'];
             $site['usable_addresses'] = $usable;
@@ -567,8 +565,17 @@ final class Repository
     public function dashboard(): array
     {
         $count=fn(string $table)=>(int)$this->one("SELECT COUNT(*) value FROM $table")['value'];
-        $subnets=$this->all("SELECT n.cidr,((SELECT COUNT(*) FROM network_interfaces i WHERE i.network_id=n.id)+(SELECT COUNT(*) FROM network_interface_addresses a JOIN network_interfaces i ON i.id=a.interface_id WHERE i.network_id=n.id)) assigned_count,(SELECT COUNT(*) FROM network_reservations r WHERE r.network_id=n.id) reserved_count FROM network_nodes n WHERE (n.node_type='leaf' AND n.allocation_type='subnet') OR n.l3_enabled=1");$usable=0;foreach($subnets as$row)$usable+=max(0,IpMath::parseCidr($row['cidr'])['usable']-1);$assigned=array_sum(array_column($subnets,'assigned_count'));$reserved=array_sum(array_column($subnets,'reserved_count'));
-        return ['sites'=>$count('sites'),'blocks'=>(int)$this->one("SELECT COUNT(*) value FROM network_nodes WHERE node_type='container' AND l3_enabled=0")['value'],'subnets'=>count($subnets),'pools'=>(int)$this->one("SELECT COUNT(*) value FROM network_nodes WHERE allocation_type IN ('static_pool','dhcp_pool')")['value'],'virtual_networks'=>$count('virtual_networks'),'hosts'=>$count('hosts'),'services'=>$count('services'),'usable'=>$usable,'assigned'=>$assigned,'reserved'=>$reserved,'free'=>max(0,$usable-$assigned-$reserved),'utilization'=>$usable?round(100*($assigned+$reserved)/$usable,2):0];
+        $subnets = array_values(array_filter($this->all('SELECT * FROM network_nodes'), [NetworkCapacity::class, 'isL3']));
+        $capacities = NetworkCapacity::load($this->db);
+        $usable = $assigned = $reserved = $occupied = 0;
+        foreach ($subnets as $node) {
+            $usage = $capacities[$node['id']] ?? [];
+            $usable += $usage['host_capacity'] ?? 0;
+            $assigned += $usage['assigned_count'] ?? 0;
+            $reserved += $usage['reserved_count'] ?? 0;
+            $occupied += $usage['occupied_count'] ?? 0;
+        }
+        return ['sites'=>$count('sites'),'blocks'=>(int)$this->one("SELECT COUNT(*) value FROM network_nodes WHERE node_type='container' AND l3_enabled=0")['value'],'subnets'=>count($subnets),'pools'=>(int)$this->one("SELECT COUNT(*) value FROM network_nodes WHERE allocation_type IN ('static_pool','dhcp_pool')")['value'],'virtual_networks'=>$count('virtual_networks'),'hosts'=>$count('hosts'),'services'=>$count('services'),'usable'=>$usable,'assigned'=>$assigned,'reserved'=>$reserved,'free'=>max(0,$usable-$occupied),'utilization'=>$usable?round(100*$occupied/$usable,2):0];
     }
 
     public function objectOptions(): array

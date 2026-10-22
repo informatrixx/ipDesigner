@@ -1,5 +1,8 @@
 name: CI
 
+permissions:
+  contents: read
+
 on:
   push:
     branches: [main]
@@ -10,20 +13,35 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: shivammathur/setup-php@v2
         with:
           php-version: '8.2'
           extensions: pdo_sqlite, mbstring
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
+      - name: Test dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Browser dependencies
+        run: npx playwright install --with-deps chromium
       - name: PHP tests
         run: php tests/run.php
       - name: JavaScript tests
-        run: node --test tests/app.test.js
+        run: npm test
+      - name: Browser interaction tests
+        run: npm run test:browser
       - name: Syntax checks
         run: |
-          find src public bin -name '*.php' -print0 | xargs -0 -n1 php -l
-          node --check public/assets/app.js
+          find src public bin tests -name '*.php' -print0 | xargs -0 -n1 php -l
+          npm run check
       - name: Diff whitespace
-        run: git diff --check
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          if [ -n "$BASE_SHA" ] && [ "$BASE_SHA" != "0000000000000000000000000000000000000000" ]; then
+            git diff --check "$BASE_SHA" HEAD
+          else
+            git show --format= --check HEAD
+          fi

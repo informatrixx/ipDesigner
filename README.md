@@ -8,7 +8,7 @@ Sites definieren eine Standard-Domain. Hosts besitzen einen getrennten Anzeigena
 
 ## Bedarfsorientierte Planung
 
-Unter **Adressplanung** beginnt ein Adressraum nur mit einer Start-IP, beispielsweise `172.20.0.0`, sowie einer Routing-Domäne/VRF. End-IP und Präfix werden nicht eingegeben. Der Planer berechnet aus Hostbedarf, tatsächlicher Belegung, Gateway und Wachstumsreserve die Subnetzgrößen und ein dynamisch wachsendes Gesamt-CIDR.
+Unter **Adressplanung** beginnt ein Adressraum nur mit einer Start-IP, beispielsweise `172.20.0.0`. End-IP und Präfix sind für den globalen Adressraum nicht erforderlich. Der Planer berechnet aus Hostbedarf, tatsächlicher Belegung, Gateway und Wachstumsreserve die Subnetzgrößen und ein dynamisch wachsendes Gesamt-CIDR. Einzelne Subnetze können optional einen festen Präfix oder eine feste Start-IP erhalten.
 
 - Optionale Gruppen können beliebig verschachtelt oder vollständig übersprungen werden.
 - Nur echte Subnetze nehmen Hosts und Reservierungen auf.
@@ -17,18 +17,26 @@ Unter **Adressplanung** beginnt ein Adressraum nur mit einer Start-IP, beispiels
 - Jeder Replan zeigt vorab sämtliche CIDR- und IP-Änderungen und wird atomar übernommen.
 - Die manuelle Reihenfolge der Gruppen und Subnetze bestimmt die Packreihenfolge.
 - Replan-Läufe werden historisiert und können bei unverändertem Folgezustand nach Vorschau zurückgerollt werden.
-- Überlappende IPv4-Adressen sind nur in unterschiedlichen Routing-Domänen zulässig.
+- IPv4-Zuweisungen sind global eindeutig. VRF gehört nicht zum aktuellen Bedienmodell; ältere Datenbankfelder bleiben aus Kompatibilitätsgründen erhalten.
+
+## Zentraler Netzcheck
+
+Der Menüpunkt **Netzcheck** prüft gespeicherte Adressen, Netzstruktur, Gateways, Pools, Kapazitäten und statische Routen. Ergebnisse lassen sich nach Site, Adressraum, Schweregrad und Prüfart filtern. Das Dashboard zeigt eine Zusammenfassung; anklickbare Symbole in der Topologie führen zu den betroffenen Befunden.
+
+Der Check läuft beim Aufrufen einer Prüf-/Übersichtsansicht und nach relevanten Änderungen in dieser Browsersitzung. „Erneut prüfen“ berücksichtigt auch externe Änderungen. Zoom und Verschieben lösen keine Prüfung aus. Fehler beim Laden bleiben sichtbar; frühere Ergebnisse werden als veraltet markiert.
+
+Es werden keine Geräte gescannt oder automatisch korrigiert. Ein geplanter Gateway ohne Router ist ein Hinweis, bei aktiven Hosts eine Warnung. Auslastungswarnungen beginnen bei 80 %. [Prüfregeln, API und Architektur](docs/NETWORK-CHECK.md) beschreiben Details und Grenzen.
 
 ## Voraussetzungen
 
 - PHP 8.2 oder neuer mit `pdo_sqlite` und `mbstring`
 - Ein moderner Browser
-- Optional Node.js 18+ für die JavaScript-Tests
+- Node.js 22+ und npm für Entwicklungs-/Browsertests; im Webbetrieb nicht benötigt
 
 ## Installation
 
 ```bash
-git clone https://github.com/<account>/ipDesigner.git
+git clone https://github.com/informatrixx/ipDesigner.git
 cd ipDesigner
 php bin/migrate.php
 ```
@@ -61,26 +69,29 @@ Danach `http://127.0.0.1:8080` öffnen. Der Entwicklungsserver ist für den ngin
 IPDESIGNER_DB_PATH=/srv/ipdesigner/data.sqlite php -S 127.0.0.1:8080 router.php
 ```
 
-Die Anwendung besitzt bewusst keine Benutzerverwaltung. Sie darf nur lokal oder hinter einem anderweitig abgesicherten Reverse Proxy betrieben werden. Für ein konsistentes Backup den PHP-Prozess kurz beenden und anschließend die SQLite-Datei kopieren.
+Die Anwendung besitzt bewusst keine Benutzerverwaltung. Sie darf nur lokal oder hinter einem anderweitig abgesicherten Reverse Proxy betrieben werden. Konsistente SQLite-Backups und Updates sind in [Deployment](docs/DEPLOYMENT.md) beschrieben. Schemaänderungen erfolgen ausschließlich über `php bin/migrate.php`, nicht beim Laden der Seite.
 
 ## Projektablauf für Solo-Development
 
 Der Standard-Branch ist `main`. Für jede Änderung wird ein kurzer Feature-Branch angelegt, lokal getestet und anschließend per Pull Request (auch bei einem Ein-Personen-Projekt) nach `main` zusammengeführt. Dadurch bleiben Review, CI und Release-Historie nachvollziehbar. Die Regeln für Branches, Commits, Tests und Releases stehen in [CONTRIBUTING.md](CONTRIBUTING.md).
 
-GitHub Actions führt bei jedem Push und Pull Request die PHP- und JavaScript-Tests aus. Laufzeitdaten, SQLite-Dateien und lokale Konfiguration werden nicht versioniert.
+GitHub Actions führt bei Pull Requests und Pushes auf `main` die PHP-, JavaScript- und Browsertests aus. Laufzeitdaten, SQLite-Dateien und lokale Konfiguration werden nicht versioniert.
 
 ## Tests
 
 ```bash
 php tests/run.php
-node --test tests/app.test.js
+npm ci
+npm test
+npx playwright install chromium
+npm run test:browser
 ```
 
 Vor einem Commit zusätzlich die wichtigsten Syntaxprüfungen ausführen:
 
 ```bash
-find src public bin -name '*.php' -print0 | xargs -0 -n1 php -l
-node --check public/assets/app.js
+find src public bin tests -name '*.php' -print0 | xargs -0 -n1 php -l
+npm run check
 ```
 
 ## Verzeichnisübersicht

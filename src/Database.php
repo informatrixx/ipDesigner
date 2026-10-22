@@ -5,6 +5,8 @@ namespace IpDesigner;
 
 use PDO;
 
+final class SchemaNotReady extends \RuntimeException {}
+
 final class Database
 {
     public static function connect(?string $path = null): PDO
@@ -18,14 +20,21 @@ final class Database
             PDO::ATTR_EMULATE_PREPARES => false,
         ]);
         $pdo->exec('PRAGMA foreign_keys = ON');
-        $pdo->exec('PRAGMA journal_mode = WAL');
         $pdo->exec('PRAGMA busy_timeout = 5000');
-        self::migrate($pdo);
         return $pdo;
+    }
+
+    public static function assertReady(PDO $pdo): void
+    {
+        $exists = $pdo->query("SELECT 1 FROM sqlite_master WHERE type='table' AND name='schema_migrations'")->fetchColumn();
+        if (!$exists || (int)$pdo->query('SELECT MAX(version) FROM schema_migrations')->fetchColumn() < 15) {
+            throw new SchemaNotReady('Datenbankschema fehlt oder ist veraltet. Bitte php bin/migrate.php ausführen.');
+        }
     }
 
     public static function migrate(PDO $pdo): void
     {
+        $pdo->exec('PRAGMA journal_mode = WAL');
         $sql = file_get_contents(__DIR__ . '/schema.sql');
         if ($sql === false) throw new \RuntimeException('Schema konnte nicht geladen werden.');
         $pdo->exec($sql);
